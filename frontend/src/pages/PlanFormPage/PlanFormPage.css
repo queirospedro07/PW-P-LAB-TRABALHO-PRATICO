@@ -1,0 +1,40 @@
+.plan-form { display: flex; flex-direction: column; gap: 1rem; }
+
+.exercises-section { display: flex; flex-direction: column; gap: 0.75rem; }
+.section-header { display: flex; align-items: center; justify-content: space-between; }
+
+.plan-ex-row { display: flex; flex-direction: column; gap: 0.5rem; }
+
+.plan-ex-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.plan-ex-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 40px;
+  gap: 0.5rem;
+  align-items: end;
+}
+
+.plan-ex-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.plan-ex-field label {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.set-input { text-align: center; padding: 0.5rem 0.25rem; min-height: 44px; }
+
+.form-actions { display: flex; gap: 0.75rem; justify-content: flex-end; padding-top: 0.5rem; }
+
+@media (max-width: 480px) {
+  .form-actions { flex-direction: column-reverse; }
+  .form-actions .btn { width: 100%; }
+}
