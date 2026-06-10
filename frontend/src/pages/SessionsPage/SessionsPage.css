@@ -60,3 +60,11 @@
   background: var(--primary);
   color: #fff;
 }
+
+@media (max-width: 480px) {
+  .session-row { flex-wrap: wrap; gap: 0.5rem; }
+  .session-actions { gap: 0.25rem; }
+  .session-actions .btn-sm { font-size: 0.75rem; padding: 0.25rem 0.5rem; min-height: 36px; }
+  .filters-row { flex-direction: column; gap: 0.5rem; }
+  .filters-row .form-group { min-width: unset; }
+}
