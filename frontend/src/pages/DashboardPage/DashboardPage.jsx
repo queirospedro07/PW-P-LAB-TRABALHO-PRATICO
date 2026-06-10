@@ -70,7 +70,7 @@ export default function DashboardPage() {
   const [userStats, setUserStats] = useState(null);
   useEffect(() => {
     Promise.all([
-      api.get('/exercises').then((r) => r.data.filter((e) => !e.isSystem).length).catch(() => 0),
+      api.get('/exercises').then((r) => r.data.length).catch(() => 0),
       api.get('/sessions', { params: { limit: 1 } }).then((r) => r.data.total).catch(() => 0),
       api.get('/plans').then((r) => r.data.length).catch(() => 0),
     ]).then(([exercises, sessions, plans]) => setUserStats({ exercises, sessions, plans }));
@@ -88,6 +88,7 @@ export default function DashboardPage() {
 
         const dayMap = [0, 0, 0, 0, 0, 0, 0];
         for (const s of res.data.sessions) {
+          if (s.status === 'in_progress') continue;
           const d = new Date(s.date);
           const dayIdx = d.getDay() === 0 ? 6 : d.getDay() - 1;
           dayMap[dayIdx]++;

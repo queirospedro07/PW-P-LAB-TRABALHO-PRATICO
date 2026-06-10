@@ -234,6 +234,7 @@ a:hover { opacity: 0.85; }
 }
 .badge-primary { background: var(--primary-subtle); color: var(--primary-light); }
 .badge-accent { background: rgba(16,185,129,0.12); color: #6ee7b7; }
+.badge-warning { background: rgba(245,158,11,0.15); color: #fbbf24; }
 
 .spinner {
   width: 32px;

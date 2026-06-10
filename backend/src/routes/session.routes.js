@@ -6,6 +6,9 @@ const {
   createSession,
   updateSession,
   deleteSession,
+  toggleSet,
+  updateSet,
+  completeSession,
 } = require('../controllers/session.controller');
 const { protect } = require('../middleware/auth');
 
@@ -22,6 +25,10 @@ const setValidation = [
 ];
 
 router.get('/', getSessions);
+
+router.patch('/sets/:setId/toggle', toggleSet);
+router.patch('/sets/:setId', updateSet);
+
 router.get('/:id', getSession);
 
 router.post('/', [
@@ -37,5 +44,6 @@ router.put('/:id', [
 ], updateSession);
 
 router.delete('/:id', deleteSession);
+router.patch('/:id/complete', completeSession);
 
 module.exports = router;

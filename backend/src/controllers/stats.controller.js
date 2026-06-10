@@ -22,7 +22,7 @@ const getDashboard = async (req, res) => {
     const weekEndISO = weekEnd.toISOString().split('T')[0];
 
     const { rows: [{ count: weekSessions }] } = await pool.query(
-      `SELECT COUNT(*) FROM sessions WHERE user_id = $1 AND date >= $2 AND date < $3`,
+      `SELECT COUNT(*) FROM sessions WHERE user_id = $1 AND date >= $2 AND date < $3 AND status = 'completed'`,
       [userId, weekStartISO, weekEndISO]
     );
 
@@ -32,7 +32,7 @@ const getDashboard = async (req, res) => {
        FROM sessions s
        LEFT JOIN session_exercises se ON se.session_id = s.id
        LEFT JOIN exercises e ON e.id = se.exercise_id
-       WHERE s.user_id = $1
+       WHERE s.user_id = $1 AND s.status = 'completed'
        ORDER BY s.date DESC, se.sort_order
        LIMIT 20`,
       [userId]
@@ -100,7 +100,7 @@ const getDashboard = async (req, res) => {
        JOIN session_exercises se ON se.session_id = s.id
        JOIN exercises e ON e.id = se.exercise_id
        JOIN sets st ON st.session_exercise_id = se.id
-       WHERE s.user_id = $1 AND s.date >= $2 AND s.date < $3${extraWhere}
+       WHERE s.user_id = $1 AND s.date >= $2 AND s.date < $3 AND s.status = 'completed'${extraWhere}
        GROUP BY e.id, e.name
        ORDER BY metric DESC
        LIMIT 3`,
@@ -143,7 +143,7 @@ const getWeeklyStats = async (req, res) => {
       let count = 0;
       try {
         const { rows: [{ count: c }] } = await pool.query(
-          `SELECT COUNT(*) FROM sessions WHERE user_id = $1 AND date >= $2 AND date < $3`,
+          `SELECT COUNT(*) FROM sessions WHERE user_id = $1 AND date >= $2 AND date < $3 AND status = 'completed'`,
           [userId, wsISO, weISO]
         );
         count = parseInt(c, 10);
@@ -178,7 +178,7 @@ const getMonthlyStats = async (req, res) => {
            FROM sessions s
            JOIN session_exercises se ON se.session_id = s.id
            JOIN sets st ON st.session_exercise_id = se.id
-           WHERE s.user_id = $1 AND s.date >= $2 AND s.date < $3`,
+           WHERE s.user_id = $1 AND s.date >= $2 AND s.date < $3 AND s.status = 'completed'`,
           [userId, msISO, meISO]
         );
         volume = parseFloat(parseFloat(row.vol).toFixed(2));
@@ -215,7 +215,7 @@ const getExerciseHistory = async (req, res) => {
        FROM sessions s
        JOIN session_exercises se ON se.session_id = s.id
        JOIN sets st ON st.session_exercise_id = se.id
-       WHERE s.user_id = $1 AND se.exercise_id = $2 ${dateWhere}
+       WHERE s.user_id = $1 AND se.exercise_id = $2 AND s.status = 'completed' ${dateWhere}
        ORDER BY s.date ASC, st.sort_order`,
       params
     );
@@ -270,7 +270,7 @@ async function getOverview(req, res) {
         (SELECT COUNT(*) FROM users WHERE is_suspended = FALSE)   AS total_users,
         (SELECT COUNT(*) FROM exercises WHERE is_system = TRUE)   AS total_system_exercises,
         (SELECT COUNT(*) FROM exercises WHERE is_system = FALSE)  AS total_custom_exercises,
-        (SELECT COUNT(*) FROM sessions s JOIN users u ON u.id = s.user_id WHERE u.is_suspended = FALSE) AS total_sessions,
+        (SELECT COUNT(*) FROM sessions s JOIN users u ON u.id = s.user_id WHERE u.is_suspended = FALSE AND s.status = 'completed') AS total_sessions,
         (SELECT COUNT(*) FROM workout_plans wp LEFT JOIN users u ON u.id = wp.user_id WHERE wp.is_system = TRUE OR u.is_suspended = FALSE) AS total_plans,
         (SELECT COALESCE(SUM(
           CASE WHEN st.weight = 0 THEN st.reps ELSE st.weight * st.reps END
@@ -279,7 +279,7 @@ async function getOverview(req, res) {
          JOIN session_exercises se ON se.id = st.session_exercise_id
          JOIN sessions s ON s.id = se.session_id
          JOIN users u ON u.id = s.user_id
-         WHERE u.is_suspended = FALSE) AS total_volume
+         WHERE u.is_suspended = FALSE AND s.status = 'completed') AS total_volume
     `);
 
     return res.json({
@@ -303,7 +303,7 @@ async function getLeaderboard(req, res) {
       SELECT u.name,
         COALESCE(SUM(CASE WHEN st.weight = 0 THEN st.reps ELSE st.weight * st.reps END), 0) AS metric
       FROM users u
-      LEFT JOIN sessions s ON s.user_id = u.id
+      LEFT JOIN sessions s ON s.user_id = u.id AND s.status = 'completed'
       LEFT JOIN session_exercises se ON se.session_id = s.id
       LEFT JOIN sets st ON st.session_exercise_id = se.id
       WHERE u.is_suspended = FALSE
@@ -313,7 +313,7 @@ async function getLeaderboard(req, res) {
     const { rows: sessionsRows } = await pool.query(`
       SELECT u.name, COUNT(s.id) AS metric
       FROM users u
-      LEFT JOIN sessions s ON s.user_id = u.id
+      LEFT JOIN sessions s ON s.user_id = u.id AND s.status = 'completed'
       WHERE u.is_suspended = FALSE
       GROUP BY u.id, u.name ORDER BY metric DESC LIMIT 3
     `);
@@ -321,7 +321,7 @@ async function getLeaderboard(req, res) {
     const { rows: weightRows } = await pool.query(`
       SELECT u.name, COALESCE(MAX(st.weight), 0) AS metric
       FROM users u
-      LEFT JOIN sessions s ON s.user_id = u.id
+      LEFT JOIN sessions s ON s.user_id = u.id AND s.status = 'completed'
       LEFT JOIN session_exercises se ON se.session_id = s.id
       LEFT JOIN sets st ON st.session_exercise_id = se.id
       WHERE u.is_suspended = FALSE AND (st.weight IS NULL OR st.weight > 0)
@@ -331,7 +331,7 @@ async function getLeaderboard(req, res) {
     const { rows: cardioRows } = await pool.query(`
       SELECT u.name, COALESCE(SUM(st.weight), 0) AS metric
       FROM users u
-      LEFT JOIN sessions s ON s.user_id = u.id
+      LEFT JOIN sessions s ON s.user_id = u.id AND s.status = 'completed'
       LEFT JOIN session_exercises se ON se.session_id = s.id
       LEFT JOIN exercises e ON e.id = se.exercise_id
       LEFT JOIN sets st ON st.session_exercise_id = se.id

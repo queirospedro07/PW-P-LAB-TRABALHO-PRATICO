@@ -1,5 +1,6 @@
 const { validationResult } = require('express-validator');
 const Session = require('../models/Session');
+const { pool } = require('../database/connection');
 
 const getSessions = async (req, res) => {
   try {
@@ -35,8 +36,8 @@ const createSession = async (req, res) => {
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
   try {
-    const { date, notes, exercises } = req.body;
-    const session = await Session.create({ userId: req.user.id, date, notes, exercises });
+    const { date, notes, exercises, status } = req.body;
+    const session = await Session.create({ userId: req.user.id, date, notes, exercises, status });
     return res.status(201).json(session);
   } catch (err) {
     console.error('createSession:', err.message);
@@ -56,8 +57,8 @@ const updateSession = async (req, res) => {
     if (!existing) return res.status(404).json({ message: 'Sessão não encontrada.' });
     if (existing.user !== req.user.id) return res.status(403).json({ message: 'Sem permissão para editar esta sessão.' });
 
-    const { date, notes, exercises } = req.body;
-    const session = await Session.update(req.params.id, { date, notes, exercises });
+    const { date, notes, exercises, status } = req.body;
+    const session = await Session.update(req.params.id, { date, notes, exercises, status });
     return res.json(session);
   } catch (err) {
     console.error('updateSession:', err.message);
@@ -79,4 +80,64 @@ const deleteSession = async (req, res) => {
   }
 };
 
-module.exports = { getSessions, getSession, createSession, updateSession, deleteSession };
+const toggleSet = async (req, res) => {
+  try {
+    const { setId } = req.params;
+    const { completed } = req.body;
+
+    const { rows } = await pool.query(
+      `SELECT s.user_id FROM sets st
+       JOIN session_exercises se ON se.id = st.session_exercise_id
+       JOIN sessions s ON s.id = se.session_id
+       WHERE st.id = $1`,
+      [setId]
+    );
+    if (!rows.length) return res.status(404).json({ message: 'Série não encontrada.' });
+    if (rows[0].user_id !== req.user.id) return res.status(403).json({ message: 'Sem permissão.' });
+
+    await Session.toggleSet(setId, completed);
+    return res.json({ setId: parseInt(setId), completed });
+  } catch (err) {
+    console.error('toggleSet:', err.message);
+    return res.status(500).json({ message: 'Erro ao atualizar série.' });
+  }
+};
+
+const updateSet = async (req, res) => {
+  try {
+    const { setId } = req.params;
+    const { reps, weight } = req.body;
+
+    const { rows } = await pool.query(
+      `SELECT s.user_id FROM sets st
+       JOIN session_exercises se ON se.id = st.session_exercise_id
+       JOIN sessions s ON s.id = se.session_id
+       WHERE st.id = $1`,
+      [setId]
+    );
+    if (!rows.length) return res.status(404).json({ message: 'Série não encontrada.' });
+    if (rows[0].user_id !== req.user.id) return res.status(403).json({ message: 'Sem permissão.' });
+
+    await Session.updateSet(setId, { reps, weight });
+    return res.json({ setId: parseInt(setId), reps, weight });
+  } catch (err) {
+    console.error('updateSet:', err.message);
+    return res.status(500).json({ message: 'Erro ao atualizar série.' });
+  }
+};
+
+const completeSession = async (req, res) => {
+  try {
+    const existing = await Session.findById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Sessão não encontrada.' });
+    if (existing.user !== req.user.id) return res.status(403).json({ message: 'Sem permissão.' });
+
+    const session = await Session.completeSession(req.params.id);
+    return res.json(session);
+  } catch (err) {
+    console.error('completeSession:', err.message);
+    return res.status(500).json({ message: 'Erro ao concluir sessão.' });
+  }
+};
+
+module.exports = { getSessions, getSession, createSession, updateSession, deleteSession, toggleSet, updateSet, completeSession };

@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { FiPlus, FiTrash2, FiX, FiSave, FiClipboard, FiChevronRight } from 'react-icons/fi';
+import { FiPlus, FiTrash2, FiX, FiClipboard, FiChevronRight, FiPlay, FiSave, FiBookOpen } from 'react-icons/fi';
 import api from '../../services/api';
 import ExercisePicker from '../../components/ExercisePicker';
 import './NewSessionPage.css';
@@ -21,21 +21,53 @@ const planToExercises = (plan) =>
     })),
   }));
 
-function SessionTypeModal({ plans, onSelectCustom, onSelectPlan, onClose }) {
+function ModeModal({ onSelectLog, onSelectLive, onClose }) {
   return (
     <div className="modal-overlay">
       <div className="modal">
         <div className="modal-header">
-          <h3 className="modal-title">Como queres treinar?</h3>
+          <h3 className="modal-title">Nova Sessão</h3>
           <button className="btn-icon" onClick={onClose} aria-label="Fechar"><FiX size={18} /></button>
         </div>
         <p className="text-sm text-secondary" style={{ marginBottom: '1rem' }}>
-          Escolhe um plano existente ou começa uma sessão personalizada.
+          O que queres fazer?
+        </p>
+        <div className="session-type-list">
+          <button className="session-type-option" onClick={onSelectLive}>
+            <div className="session-type-info">
+              <span className="font-medium">Treinar agora</span>
+              <span className="text-xs text-muted">Começo o treino e confirmo as séries à medida que faço</span>
+            </div>
+            <FiPlay size={16} className="text-muted" />
+          </button>
+          <button className="session-type-option" onClick={onSelectLog}>
+            <div className="session-type-info">
+              <span className="font-medium">Registar treino passado</span>
+              <span className="text-xs text-muted">Já treinei e quero adicionar o registo</span>
+            </div>
+            <FiSave size={16} className="text-muted" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PlanModal({ plans, onSelectCustom, onSelectPlan, onClose }) {
+  return (
+    <div className="modal-overlay">
+      <div className="modal">
+        <div className="modal-header">
+          <h3 className="modal-title">Escolher exercícios</h3>
+          <button className="btn-icon" onClick={onClose} aria-label="Fechar"><FiX size={18} /></button>
+        </div>
+        <p className="text-sm text-secondary" style={{ marginBottom: '1rem' }}>
+          Usa um plano ou escolhe os exercícios manualmente.
         </p>
         <div className="session-type-list">
           <button className="session-type-option" onClick={onSelectCustom}>
             <div className="session-type-info">
-              <span className="font-medium">Sessão personalizada</span>
+              <span className="font-medium">Personalizado</span>
               <span className="text-xs text-muted">Escolho os exercícios manualmente</span>
             </div>
             <FiChevronRight size={16} className="text-muted" />
@@ -52,7 +84,7 @@ function SessionTypeModal({ plans, onSelectCustom, onSelectPlan, onClose }) {
                       {plan.description ? ` · ${plan.description}` : ''}
                     </span>
                   </div>
-                  <FiChevronRight size={16} className="text-muted" />
+                  <FiBookOpen size={16} className="text-muted" />
                 </button>
               ))}
             </>
@@ -67,8 +99,15 @@ export default function NewSessionPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const planFromNav = location.state?.plan || null;
+  const modeFromNav = location.state?.mode || null;
 
-  const [mode, setMode] = useState(planFromNav ? 'ready' : 'choosing');
+  // Modes: 'pick-mode' → 'pick-plan' → 'form'
+  const [step, setStep] = useState(() => {
+    if (planFromNav) return 'form';
+    if (modeFromNav) return 'pick-plan';
+    return 'pick-mode';
+  });
+  const [sessionMode, setSessionMode] = useState(modeFromNav || (planFromNav ? 'live' : null)); // 'log' or 'live'
   const [plans, setPlans] = useState([]);
   const [plansLoading, setPlansLoading] = useState(!planFromNav);
 
@@ -89,11 +128,16 @@ export default function NewSessionPage() {
       .finally(() => setPlansLoading(false));
   }, []);
 
-  const handleSelectCustom = () => setMode('ready');
+  const handleSelectMode = (mode) => {
+    setSessionMode(mode);
+    setStep('pick-plan');
+  };
+
+  const handleSelectCustom = () => setStep('form');
   const handleSelectPlan = (plan) => {
     setExercises(planToExercises(plan));
     setPlanName(plan.name);
-    setMode('ready');
+    setStep('form');
   };
 
   const fetchMaxWeight = useCallback(async (exerciseId) => {
@@ -152,32 +196,71 @@ export default function NewSessionPage() {
       }
     }
     setLoading(true);
+
+    const isLive = sessionMode === 'live';
+
     try {
       const payload = {
         date,
         notes,
+        status: isLive ? 'in_progress' : 'completed',
         exercises: exercises.map((ex, i) => ({
           exercise: ex.exercise.id,
           order: i,
-          sets: ex.sets.map((s, j) => ({ reps: Number(s.reps), weight: Number(s.weight), order: j })),
+          sets: ex.sets.map((s, j) => ({
+            reps: Number(s.reps),
+            weight: Number(s.weight),
+            order: j,
+            completed: !isLive,
+          })),
         })),
       };
       const res = await api.post('/sessions', payload);
-      navigate(`/sessions/${res.data._id || res.data.id}`);
+      const sid = res.data._id || res.data.id;
+
+      if (isLive) {
+        navigate(`/sessions/${sid}/live`);
+      } else {
+        navigate(`/sessions/${sid}`);
+      }
     } catch (err) {
       const errors = err.response?.data?.errors;
       setError(errors?.length ? errors.map((e) => e.msg).join('. ') : err.response?.data?.message || 'Erro ao criar sessão.');
     } finally { setLoading(false); }
   };
 
-  if (mode === 'choosing') {
-    if (plansLoading) return <div className="loading-center"><div className="spinner" /></div>;
-    return <SessionTypeModal plans={plans} onSelectCustom={handleSelectCustom} onSelectPlan={handleSelectPlan} onClose={() => navigate(-1)} />;
+  // Step 1: pick mode
+  if (step === 'pick-mode') {
+    return (
+      <ModeModal
+        onSelectLog={() => handleSelectMode('log')}
+        onSelectLive={() => handleSelectMode('live')}
+        onClose={() => navigate(-1)}
+      />
+    );
   }
+
+  // Step 2: pick plan/custom
+  if (step === 'pick-plan') {
+    if (plansLoading) return <div className="loading-center"><div className="spinner" /></div>;
+    return (
+      <PlanModal
+        plans={plans}
+        onSelectCustom={handleSelectCustom}
+        onSelectPlan={handleSelectPlan}
+        onClose={() => setStep('pick-mode')}
+      />
+    );
+  }
+
+  // Step 3: form
+  const isLive = sessionMode === 'live';
 
   return (
     <div className="page">
-      <div className="page-header"><h1>Nova Sessão</h1></div>
+      <div className="page-header">
+        <h1>{isLive ? 'Preparar Treino' : 'Registar Treino'}</h1>
+      </div>
 
       {planName && (
         <div className="alert alert-info" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -262,7 +345,8 @@ export default function NewSessionPage() {
         <div className="form-actions">
           <button type="button" className="btn btn-ghost" onClick={() => navigate(-1)}>Cancelar</button>
           <button type="submit" className="btn btn-primary" disabled={loading}>
-            <FiSave size={14} /> {loading ? 'A guardar...' : 'Guardar'}
+            {isLive ? <FiPlay size={14} /> : <FiSave size={14} />}
+            {loading ? 'A guardar...' : isLive ? 'Começar Treino' : 'Guardar'}
           </button>
         </div>
       </form>

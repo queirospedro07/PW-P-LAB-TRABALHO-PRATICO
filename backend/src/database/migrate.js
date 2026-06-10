@@ -99,6 +99,9 @@ const migrate = async () => {
 
     await client.query(`ALTER TABLE workout_plans ALTER COLUMN user_id DROP NOT NULL;`);
 
+    await client.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'completed';`);
+    await client.query(`ALTER TABLE sets ADD COLUMN IF NOT EXISTS completed BOOLEAN NOT NULL DEFAULT TRUE;`);
+
     console.log('Migrações concluídas com sucesso.');
   } catch (err) {
     console.error('Erro nas migrações:', err.message);

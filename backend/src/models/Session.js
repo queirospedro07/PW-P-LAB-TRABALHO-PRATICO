@@ -17,6 +17,7 @@ const buildSession = (rows) => {
     user: first.user_id,
     date: first.date,
     notes: first.notes,
+    status: first.status || 'completed',
     createdAt: first.created_at,
     exercises: [],
   };
@@ -47,6 +48,7 @@ const buildSession = (rows) => {
         reps: parseInt(row.set_reps, 10),
         weight: parseFloat(row.set_weight),
         order: row.set_order,
+        completed: row.set_completed !== false && row.set_completed !== 'f',
       });
     }
   }
@@ -72,6 +74,7 @@ const SESSION_QUERY = `
     s.user_id,
     s.date,
     s.notes,
+    s.status,
     s.created_at,
     se.id         AS se_id,
     se.sort_order AS se_order,
@@ -82,7 +85,8 @@ const SESSION_QUERY = `
     st.id         AS set_id,
     st.reps       AS set_reps,
     st.weight     AS set_weight,
-    st.sort_order AS set_order
+    st.sort_order AS set_order,
+    st.completed  AS set_completed
   FROM sessions s
   LEFT JOIN session_exercises se ON se.session_id = s.id
   LEFT JOIN exercises e          ON e.id = se.exercise_id
@@ -149,28 +153,29 @@ const Session = {
     return buildSession(rows);
   },
 
-  async create({ userId, date, notes, exercises }, client) {
+  async create({ userId, date, notes, exercises, status }, client) {
     const c = client || pool;
 
     const { rows: [session] } = await c.query(
-      `INSERT INTO sessions (user_id, date, notes)
-       VALUES ($1, $2, $3) RETURNING id`,
-      [userId, date, notes || '']
+      `INSERT INTO sessions (user_id, date, notes, status)
+       VALUES ($1, $2, $3, $4) RETURNING id`,
+      [userId, date, notes || '', status || 'completed']
     );
 
     await Session._insertExercises(session.id, exercises || [], c);
     return Session.findById(session.id);
   },
 
-  async update(id, { date, notes, exercises }, client) {
+  async update(id, { date, notes, exercises, status }, client) {
     const c = client || pool;
 
     const fields = [];
     const params = [];
     let idx = 1;
 
-    if (date  !== undefined) { fields.push(`date = $${idx++}`);  params.push(date); }
-    if (notes !== undefined) { fields.push(`notes = $${idx++}`); params.push(notes); }
+    if (date    !== undefined) { fields.push(`date = $${idx++}`);   params.push(date); }
+    if (notes   !== undefined) { fields.push(`notes = $${idx++}`);  params.push(notes); }
+    if (status  !== undefined) { fields.push(`status = $${idx++}`); params.push(status); }
     fields.push(`updated_at = NOW()`);
     params.push(id);
 
@@ -197,6 +202,7 @@ const Session = {
     for (let i = 0; i < exercises.length; i++) {
       const ex = exercises[i];
       const exId = ex.exercise || ex.exercise_id || ex.exerciseId;
+      const completed = ex.completed !== undefined ? ex.completed : true;
 
       const { rows: [se] } = await c.query(
         `INSERT INTO session_exercises (session_id, exercise_id, sort_order)
@@ -208,12 +214,41 @@ const Session = {
       for (let j = 0; j < sets.length; j++) {
         const s = sets[j];
         await c.query(
-          `INSERT INTO sets (session_exercise_id, reps, weight, sort_order)
-           VALUES ($1, $2, $3, $4)`,
-          [se.id, s.reps, s.weight, s.order ?? j]
+          `INSERT INTO sets (session_exercise_id, reps, weight, sort_order, completed)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [se.id, s.reps, s.weight, s.order ?? j, s.completed !== undefined ? s.completed : true]
         );
       }
     }
+  },
+
+  async toggleSet(setId, completed) {
+    await pool.query(
+      `UPDATE sets SET completed = $1 WHERE id = $2`,
+      [completed, setId]
+    );
+  },
+
+  async updateSet(setId, { reps, weight }) {
+    const fields = [];
+    const params = [];
+    let idx = 1;
+    if (reps !== undefined) { fields.push(`reps = $${idx++}`); params.push(reps); }
+    if (weight !== undefined) { fields.push(`weight = $${idx++}`); params.push(weight); }
+    if (fields.length === 0) return;
+    params.push(setId);
+    await pool.query(
+      `UPDATE sets SET ${fields.join(', ')} WHERE id = $${idx}`,
+      params
+    );
+  },
+
+  async completeSession(id) {
+    await pool.query(
+      `UPDATE sessions SET status = 'completed', updated_at = NOW() WHERE id = $1`,
+      [id]
+    );
+    return Session.findById(id);
   },
 };
 

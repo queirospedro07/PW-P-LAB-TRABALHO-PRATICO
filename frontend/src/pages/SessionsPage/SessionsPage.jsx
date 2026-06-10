@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { FiPlus, FiTrash2, FiChevronDown, FiChevronUp, FiEye, FiFilter } from 'react-icons/fi';
+import { FiPlus, FiTrash2, FiChevronDown, FiChevronUp, FiEye, FiFilter, FiPlay } from 'react-icons/fi';
 import api from '../../services/api';
 import { formatDate } from '../../utils/date';
 import ConfirmModal from '../../components/ConfirmModal';
@@ -89,14 +89,23 @@ export default function SessionsPage() {
                 <div key={sid} className="card session-card">
                   <div className="session-row" onClick={() => setExpanded(expanded === sid ? null : sid)}>
                     <div className="session-info">
-                      <span className="session-date">{formatDate(session.date)}</span>
+                      <span className="session-date">
+                        {formatDate(session.date)}
+                        {session.status === 'in_progress' && <span className="badge badge-warning" style={{ marginLeft: '0.5rem' }}>Em curso</span>}
+                      </span>
                       <div className="session-meta">
                         <span>{session.exercises?.length || 0} exercício(s)</span>
                         {session.totalVolume > 0 && <span>{session.totalVolume} vol</span>}
                       </div>
                     </div>
                     <div className="session-actions">
-                      <Link to={`/sessions/${sid}`} className="btn-icon" onClick={(e) => e.stopPropagation()} aria-label="Ver"><FiEye size={15} /></Link>
+                      {session.status === 'in_progress' ? (
+                        <Link to={`/sessions/${sid}/live`} className="btn btn-primary btn-sm" onClick={(e) => e.stopPropagation()} aria-label="Continuar">
+                          <FiPlay size={13} /> Continuar
+                        </Link>
+                      ) : (
+                        <Link to={`/sessions/${sid}`} className="btn-icon" onClick={(e) => e.stopPropagation()} aria-label="Ver"><FiEye size={15} /></Link>
+                      )}
                       <button className="btn-icon" onClick={(e) => { e.stopPropagation(); setDeleteId(sid); }} aria-label="Eliminar"><FiTrash2 size={15} /></button>
                       {expanded === sid ? <FiChevronUp size={14} className="text-muted" /> : <FiChevronDown size={14} className="text-muted" />}
                     </div>
