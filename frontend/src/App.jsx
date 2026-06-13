@@ -13,6 +13,7 @@ import ExerciseHistoryPage from './pages/ExerciseHistoryPage';
 import PlansPage from './pages/PlansPage';
 import PlanFormPage from './pages/PlanFormPage';
 import AdminPage from './pages/AdminPage';
+import NotFoundPage from './pages/NotFoundPage';
 
 const PrivateRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -46,7 +47,7 @@ export default function App() {
             <Route path="plans/:id/edit" element={<PlanFormPage />} />
             <Route path="admin" element={<AdminPage />} />
           </Route>
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>
