@@ -144,13 +144,22 @@ export default function NewSessionPage() {
     if (maxWeights[exerciseId] !== undefined) return;
     try {
       const res = await api.get(`/stats/exercises/${exerciseId}/history`);
-      setMaxWeights((prev) => ({ ...prev, [exerciseId]: res.data.maxWeight || 0 }));
-    } catch { setMaxWeights((prev) => ({ ...prev, [exerciseId]: 0 })); }
+      const history = res.data.history || [];
+      const lastSession = history.length > 0 ? history[history.length - 1] : null;
+      const lastWeight = lastSession ? lastSession.sets[0]?.weight || 0 : 0;
+      setMaxWeights((prev) => ({ ...prev, [exerciseId]: { max: res.data.maxWeight || 0, last: lastWeight } }));
+    } catch { setMaxWeights((prev) => ({ ...prev, [exerciseId]: { max: 0, last: 0 } })); }
   }, [maxWeights]);
 
   const addExercise = (exercise) => {
     if (exercises.find((e) => e.exercise.id === exercise.id)) { setShowPicker(false); return; }
-    setExercises((prev) => [...prev, { exercise, sets: [emptySet()], order: prev.length }]);
+    const cached = maxWeights[exercise.id];
+    const defaultWeight = cached?.last || 0;
+    setExercises((prev) => [...prev, {
+      exercise,
+      sets: [{ reps: '', weight: defaultWeight > 0 ? String(defaultWeight) : '' }],
+      order: prev.length,
+    }]);
     fetchMaxWeight(exercise.id);
     setShowPicker(false);
   };
@@ -160,7 +169,9 @@ export default function NewSessionPage() {
   const addSet = (exIdx) => {
     setExercises((prev) => {
       const u = [...prev];
-      u[exIdx] = { ...u[exIdx], sets: [...u[exIdx].sets, emptySet()] };
+      const lastSet = u[exIdx].sets[u[exIdx].sets.length - 1];
+      const newSet = { reps: lastSet?.reps || '', weight: lastSet?.weight || '' };
+      u[exIdx] = { ...u[exIdx], sets: [...u[exIdx].sets, newSet] };
       return u;
     });
   };
@@ -192,7 +203,7 @@ export default function NewSessionPage() {
     for (const ex of exercises) {
       for (const s of ex.sets) {
         if (!s.reps || Number(s.reps) < 1) { setError('Todas as séries devem ter pelo menos 1 repetição.'); return; }
-        if (s.weight === '' || Number(s.weight) < 0) { setError('O peso não pode ser negativo.'); return; }
+        if (s.weight !== '' && Number(s.weight) < 0) { setError('O peso não pode ser negativo.'); return; }
       }
     }
     setLoading(true);
@@ -209,7 +220,7 @@ export default function NewSessionPage() {
           order: i,
           sets: ex.sets.map((s, j) => ({
             reps: Number(s.reps),
-            weight: Number(s.weight),
+            weight: s.weight === '' ? 0 : Number(s.weight),
             order: j,
             completed: !isLive,
           })),
@@ -309,8 +320,8 @@ export default function NewSessionPage() {
                   <h3>{ex.exercise.name}</h3>
                   <div className="ex-meta">
                     <span className="badge badge-primary">{ex.exercise.muscleGroup}</span>
-                    {!isCardio && maxWeights[ex.exercise.id] > 0 && (
-                      <span className="text-xs text-secondary">Máx: {maxWeights[ex.exercise.id]} kg</span>
+                    {!isCardio && maxWeights[ex.exercise.id]?.max > 0 && (
+                      <span className="text-xs text-secondary">Máx: {maxWeights[ex.exercise.id].max} kg</span>
                     )}
                   </div>
                 </div>
